@@ -1,0 +1,15 @@
+[package]
+name = "sorted-groups"
+version = "0.1.0"
+authors = ["David Rousselie <david@rousselie.name>"]
+edition = "2021"
+license = "Apache-2.0"
+description = "Implement a data structure to store elements in sorted groups while maintaining the order of elements in each group"
+homepage = "https://github.com/dax/sorted-groups"
+repository = "https://github.com/dax/sorted-groups"
+keywords = ["group", "sorted", "vec"]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
