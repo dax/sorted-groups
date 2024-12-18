@@ -30,10 +30,11 @@ impl PartialOrd for Element {
 }
 
 // Elements will be grouped by the `group` field
-let mut sorted_groups = SortedGroups::<i32, Element, _>::new(|e| e.group);
-sorted_groups.insert(Element { group: 1, value: 1 });
-sorted_groups.insert(Element { group: 1, value: 2 });
-sorted_groups.insert(Element { group: 2, value: 3 });
+let sorted_groups = SortedGroups::<i32, Element>::new(vec![
+   Element { group: 1, value: 1 },
+   Element { group: 1, value: 2 },
+   Element { group: 2, value: 1 },
+], |e| e.group);
 
 // `len` returns the total number of elements
 assert_eq!(sorted_groups.len(), 3);
@@ -43,7 +44,7 @@ assert_eq!(sorted_groups.groups_len(), 2);
 let mut iter = sorted_groups.iter();
 assert_eq!(iter.next(), Some((&1, &Element { group: 1, value: 1 })));
 assert_eq!(iter.next(), Some((&1, &Element { group: 1, value: 2 })));
-assert_eq!(iter.next(), Some((&2, &Element { group: 2, value: 3 })));
+assert_eq!(iter.next(), Some((&2, &Element { group: 2, value: 1 })));
 assert_eq!(iter.next(), None);
 ```
 
