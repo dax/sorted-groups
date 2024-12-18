@@ -23,10 +23,11 @@
 //! }
 //!
 //! // Elements will be grouped by the `group` field
-//! let mut sorted_groups = SortedGroups::<i32, Element, _>::new(|e| e.group);
-//! sorted_groups.insert(Element { group: 1, value: 1 });
-//! sorted_groups.insert(Element { group: 1, value: 2 });
-//! sorted_groups.insert(Element { group: 2, value: 3 });
+//! let sorted_groups = SortedGroups::<i32, Element>::new(vec![
+//!    Element { group: 1, value: 1 },
+//!    Element { group: 1, value: 2 },
+//!    Element { group: 2, value: 1 },
+//! ], |e| e.group);
 //!
 //! // `len` returns the total number of elements
 //! assert_eq!(sorted_groups.len(), 3);
@@ -36,52 +37,50 @@
 //! let mut iter = sorted_groups.iter();
 //! assert_eq!(iter.next(), Some((&1, &Element { group: 1, value: 1 })));
 //! assert_eq!(iter.next(), Some((&1, &Element { group: 1, value: 2 })));
-//! assert_eq!(iter.next(), Some((&2, &Element { group: 2, value: 3 })));
+//! assert_eq!(iter.next(), Some((&2, &Element { group: 2, value: 1 })));
 //! assert_eq!(iter.next(), None);
 //! ```
 //!
 use std::collections::{btree_map::BTreeMap, btree_set, BTreeSet};
 
-pub struct SortedGroups<G, E, F>
+#[derive(Clone, Debug)]
+pub struct SortedGroups<G, E>
 where
     G: Ord,
     E: Ord,
-    F: Fn(&E) -> G,
 {
     groups: BTreeMap<G, BTreeSet<E>>,
-    group_from_element: F,
 }
 
-impl<G, E, F> SortedGroups<G, E, F>
+impl<G, E> SortedGroups<G, E>
 where
     G: Ord,
     E: Ord,
-    F: Fn(&E) -> G,
 {
-    pub fn new(group_from_element: F) -> Self {
-        Self {
-            groups: BTreeMap::new(),
-            group_from_element,
-        }
-    }
-
-    pub fn from_iter(elements: impl Iterator<Item = E>, group_from_element: F) -> Self {
-        let mut sorted_groups = Self::new(group_from_element);
+    pub fn new(
+        elements: impl IntoIterator<Item = E>,
+        group_from_element: impl Fn(&E) -> G,
+    ) -> Self {
+        let mut groups = BTreeMap::<G, BTreeSet<E>>::new();
         for element in elements {
-            sorted_groups.insert(element);
+            groups
+                .entry(group_from_element(&element))
+                .or_default()
+                .insert(element);
         }
-        sorted_groups
-    }
-
-    pub fn insert(&mut self, element: E) {
-        self.groups
-            .entry((self.group_from_element)(&element))
-            .or_default()
-            .insert(element);
+        Self { groups }
     }
 
     pub fn len(&self) -> usize {
         self.groups.values().map(|v| v.len()).sum()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn get(&self, index: usize) -> Option<(&G, &E)> {
+        self.iter().nth(index)
     }
 
     pub fn groups_len(&self) -> usize {
@@ -100,11 +99,10 @@ pub struct SortedGroupsIter<'a, G, E> {
     current_group: Option<(&'a G, btree_set::Iter<'a, E>)>,
 }
 
-impl<G, E, F> SortedGroups<G, E, F>
+impl<G, E> SortedGroups<G, E>
 where
     G: Ord,
     E: Ord,
-    F: Fn(&E) -> G,
 {
     pub fn iter(&self) -> SortedGroupsIter<'_, G, E> {
         let mut groups_iter = self.groups.iter();
@@ -142,17 +140,26 @@ where
 }
 
 // Implement IntoIterator for reference
-impl<'a, G, E, F> IntoIterator for &'a SortedGroups<G, E, F>
+impl<'a, G, E> IntoIterator for &'a SortedGroups<G, E>
 where
-    G: Ord + Clone,
+    G: Ord,
     E: Ord,
-    F: Fn(&E) -> G,
 {
     type Item = (&'a G, &'a E);
     type IntoIter = SortedGroupsIter<'a, G, E>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+
+impl<G, E> PartialEq for SortedGroups<G, E>
+where
+    G: Ord,
+    E: Ord,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.groups.eq(&other.groups)
     }
 }
 
@@ -174,23 +181,27 @@ mod tests {
 
     #[test]
     fn test_empty_sorted_groups() {
-        let sorted_groups = SortedGroups::<i32, Element, _>::new(|e| e.group);
+        let sorted_groups = SortedGroups::<i32, Element>::new(vec![].into_iter(), |e| e.group);
         assert_eq!(sorted_groups.len(), 0);
     }
 
     #[test]
     fn test_insert_sorted_groups() {
-        let mut sorted_groups = SortedGroups::<i32, Element, _>::new(|e| e.group);
-        sorted_groups.insert(Element { group: 1, value: 1 });
-        sorted_groups.insert(Element { group: 1, value: 2 });
-        sorted_groups.insert(Element { group: 2, value: 3 });
+        let sorted_groups = SortedGroups::<i32, Element>::new(
+            vec![
+                Element { group: 1, value: 1 },
+                Element { group: 1, value: 2 },
+                Element { group: 2, value: 1 },
+            ],
+            |e| e.group,
+        );
 
         assert_eq!(sorted_groups.len(), 3);
         assert_eq!(sorted_groups.groups_len(), 2);
         let mut iter = sorted_groups.iter();
         assert_eq!(iter.next(), Some((&1, &Element { group: 1, value: 1 })));
         assert_eq!(iter.next(), Some((&1, &Element { group: 1, value: 2 })));
-        assert_eq!(iter.next(), Some((&2, &Element { group: 2, value: 3 })));
+        assert_eq!(iter.next(), Some((&2, &Element { group: 2, value: 1 })));
         assert_eq!(iter.next(), None);
     }
 }
